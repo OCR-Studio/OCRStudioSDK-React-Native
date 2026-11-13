@@ -1,0 +1,135 @@
+buildscript {
+  ext.getExtOrDefault = {name ->
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties['Ocrstudiosdk_' + name]
+  }
+
+  repositories {
+    google()
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.12.3"
+    // noinspection DifferentKotlinGradleVersion
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${getExtOrDefault('kotlinVersion')}"
+  }
+}
+
+def isNewArchitectureEnabled() {
+    return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
+}
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+apply plugin: "com.facebook.react"
+
+def getExtOrIntegerDefault(name) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["Ocrstudiosdk_" + name]).toInteger()
+}
+
+def supportsNamespace() {
+  def parsed = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')
+  def major = parsed[0].toInteger()
+  def minor = parsed[1].toInteger()
+
+  // Namespace support was added in 7.3.0
+  return (major == 7 && minor >= 3) || major >= 8
+}
+
+android {
+  if (supportsNamespace()) {
+    namespace "ai.ocrstudio.sdk"
+
+    sourceSets {
+      main {
+        manifest.srcFile "src/main/AndroidManifestNew.xml"
+      }
+    }
+  }
+
+  compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
+
+  defaultConfig {
+    minSdkVersion getExtOrIntegerDefault("minSdkVersion")
+    targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+    buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString())
+  }
+
+  buildFeatures {
+    dataBinding true
+    buildConfig true
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  lintOptions {
+    disable "GradleCompatible"
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+
+  sourceSets {
+    main {
+      if (isNewArchitectureEnabled()) {
+      java.srcDirs += [
+        'src/newarch',
+        "generated/java",
+        "generated/jni"
+      ]
+      } else {
+          java.srcDirs += ['src/oldarch']
+      }
+    }
+  }
+}
+
+repositories {
+  mavenCentral()
+  google()
+}
+
+def kotlin_version = getExtOrDefault("kotlinVersion")
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+  implementation 'androidx.databinding:databinding-runtime:8.9.1'
+
+    // CameraX core library using the camera2 implementation
+  def camerax_version = "1.4.2"
+  // The following line is optional, as the core library is included indirectly by camera-camera2
+  implementation "androidx.camera:camera-core:${camerax_version}"
+  implementation "androidx.camera:camera-camera2:${camerax_version}"
+  // If you want to additionally use the CameraX Lifecycle library
+  implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+  // If you want to additionally use the CameraX VideoCapture library
+  implementation "androidx.camera:camera-video:${camerax_version}"
+  // If you want to additionally use the CameraX View class
+  implementation "androidx.camera:camera-view:${camerax_version}"
+  // If you want to additionally use the CameraX Extensions library
+  implementation "androidx.camera:camera-extensions:${camerax_version}"
+
+
+  implementation fileTree(include: ['*.jar'], dir: 'src/main/libs/')
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+  implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+  // nfc libs
+  implementation "org.jmrtd:jmrtd:0.7.18"
+  implementation "net.sf.scuba:scuba-sc-android:0.0.18"
+}
+
+if (isNewArchitectureEnabled()) {
+react {
+  jsRootDir = file("../src/")
+  libraryName = "Ocrstudiosdk"
+  codegenJavaPackageName = "ai.ocrstudio.sdk"
+  }
+}
